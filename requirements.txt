@@ -1,0 +1,6 @@
+gymnasium[atari]>=0.29
+stable-baselines3>=2.3
+ale-py>=0.11
+opencv-python>=4.8
+numpy>=1.24
+torch>=2.0
