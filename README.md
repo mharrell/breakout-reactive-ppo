@@ -2,6 +2,8 @@
 
 **PPO on Atari Breakout converges to a memorized action sequence, not a reactive ball-tracking policy. Here's why, and here's the fix.**
 
+**[▶ Watch the split-watcher in action](https://www.youtube.com/watch?v=6ixVwQm7u5Y)** — same model, two different brick layouts, independent predictions per side. The paddle moves differently on each side because the ball bounces differently. A memorized script can't do this.
+
 ---
 
 ## The Problem
