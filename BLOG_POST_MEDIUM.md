@@ -30,24 +30,35 @@ Over the course of this project, I tried systematically eliminating memorization
 
 Here's the graveyard:
 
-<table>
-<tr><th>Approach</th><th>What I Tried</th><th>Why It Failed</th></tr>
-<tr><td>Sticky actions (p=0.25)</td><td>Random action noise during training</td><td>Breakout is forgiving — scripts survive 25% noise. Dead policy + sticky = 8–14 "unique" scores. The noise masks memorization; it doesn't prevent it. Sticky actions were proposed by Machado et al. (2018) as the standard ALE evaluation protocol, but Zhang et al. (2018) had already shown they don't prevent memorization in deep RL — a finding this project independently confirmed: every sticky-trained model collapsed to a deterministic script without sticky actions.</td></tr>
-<tr><td>Cursor wrappers (13 variants)</td><td>Adversarial "cursor" that attacks the paddle when it's far from the ball</td><td>PPO learned to hedge: maintain a reactive-looking distribution (where's the ball?) while the argmax converged to a fixed script. The distribution tracks the ball; the mode ignores it.</td></tr>
-<tr><td>Entropy bonuses (0.006–0.10)</td><td>Reward the policy for diverse action distributions</td><td>Entropy came from random action noise, not from tracking the ball.</td></tr>
-<tr><td>Frame skip</td><td>Unpredictable observation timing</td><td>The CNN conditioned on the skip pattern. PPO found a skip-conditioned script.</td></tr>
-<tr><td>Dynamics randomization</td><td>Vary ball physics via setRAM() per episode</td><td>CNN conditioned on the first few frames. Layout-conditioned, episode-conditioned — not reactive.</td></tr>
-<tr><td>Random bricks each episode</td><td>Different brick layout every reset</td><td>Same — conditioned on initial observation, not tracking.</td></tr>
-<tr><td>Trajectory entropy</td><td>Reward taking <i>different</i> actions across parallel environments at the same frame</td><td>Scripts with timing offsets produce different actions at the same frame. Superficial diversity.</td></tr>
-<tr><td>Moving bumpers (15 shapes)</td><td>Indestructible brick shapes that reposition every 60–150 frames</td><td>Ball-bounce timing variance produced false score diversity.</td></tr>
-<tr><td>Extreme bumper (2 independent)</td><td>Two bumpers with 3+ brick shapes each</td><td>Same problem.</td></tr>
-<tr><td>One-life training</td><td>No EpisodicLifeEnv — harder penalty for mistakes</td><td>Scripts still viable. You can script Breakout with one life.</td></tr>
-<tr><td>Brick pre-clearing</td><td>Start each episode with 15–25 random bricks already cleared</td><td>CNN conditioned on remaining bricks. Another conditioned script.</td></tr>
-<tr><td>Ball-binned trajectory entropy</td><td>Reward action diversity conditioned on ball position (LEFT/CENTER/RIGHT bins)</td><td>Timing offsets still produced false diversity signals.</td></tr>
-<tr><td>Random ball bounce perturbation</td><td>Nudge ball X by N(0, 3) on every paddle bounce</td><td>Breakout is STILL forgiving enough for scripts to survive unpredictable ball trajectories.</td></tr>
-<tr><td>Auxiliary ball-position supervision</td><td>Add regression head: predict ball (x, y) from conv features</td><td>CNN learned to locate the ball with 1.9px precision. Policy still memorized. Features baked in, argmax ignored them.</td></tr>
-<tr><td>BeamRider (different game!)</td><td>Hard failure — one mistake kills you, as well as adversarial enemies that attack you and must be fought off</td><td>Didn't help. BeamRider models were SINGLE_SCRIPT too (std=0.0). Same distribution-vs-argmax confound, different game.</td></tr>
-</table>
+**Sticky actions (p=0.25):** Random action noise during training. *Why it failed:* Breakout is forgiving — scripts survive 25% noise. Dead policy + sticky = 8–14 "unique" scores. The noise masks memorization; it doesn't prevent it. Sticky actions were proposed by Machado et al. (2018) as the standard ALE evaluation protocol, but Zhang et al. (2018) had already shown they don't prevent memorization in deep RL — a finding this project independently confirmed: every sticky-trained model collapsed to a deterministic script without sticky actions.
+
+**Cursor wrappers (13 variants):** Adversarial "cursor" that attacks the paddle when it's far from the ball. *Why it failed:* PPO learned to hedge: maintain a reactive-looking distribution (where's the ball?) while the argmax converged to a fixed script. The distribution tracks the ball; the mode ignores it.
+
+**Entropy bonuses (0.006–0.10):** Reward the policy for diverse action distributions. *Why it failed:* Entropy came from random action noise, not from tracking the ball.
+
+**Frame skip:** Unpredictable observation timing. *Why it failed:* The CNN conditioned on the skip pattern. PPO found a skip-conditioned script.
+
+**Dynamics randomization:** Vary ball physics via setRAM() per episode. *Why it failed:* CNN conditioned on the first few frames. Layout-conditioned, episode-conditioned — not reactive.
+
+**Random bricks each episode:** Different brick layout every reset. *Why it failed:* Same — conditioned on initial observation, not tracking.
+
+**Trajectory entropy:** Reward taking *different* actions across parallel environments at the same frame. *Why it failed:* Scripts with timing offsets produce different actions at the same frame. Superficial diversity.
+
+**Moving bumpers (15 shapes):** Indestructible brick shapes that reposition every 60–150 frames. *Why it failed:* Ball-bounce timing variance produced false score diversity.
+
+**Extreme bumper (2 independent):** Two bumpers with 3+ brick shapes each. *Why it failed:* Same problem.
+
+**One-life training:** No EpisodicLifeEnv — harder penalty for mistakes. *Why it failed:* Scripts still viable. You can script Breakout with one life.
+
+**Brick pre-clearing:** Start each episode with 15–25 random bricks already cleared. *Why it failed:* CNN conditioned on remaining bricks. Another conditioned script.
+
+**Ball-binned trajectory entropy:** Reward action diversity conditioned on ball position (LEFT/CENTER/RIGHT bins). *Why it failed:* Timing offsets still produced false diversity signals.
+
+**Random ball bounce perturbation:** Nudge ball X by N(0, 3) on every paddle bounce. *Why it failed:* Breakout is STILL forgiving enough for scripts to survive unpredictable ball trajectories.
+
+**Auxiliary ball-position supervision:** Add regression head: predict ball (x, y) from conv features. *Why it failed:* CNN learned to locate the ball with 1.9px precision. Policy still memorized. Features baked in, argmax ignored them.
+
+**BeamRider (different game!):** Hard failure — one mistake kills you, as well as adversarial enemies that attack you and must be fought off. *Why it failed:* Didn't help. BeamRider models were SINGLE_SCRIPT too (std=0.0). Same distribution-vs-argmax confound, different game.
 
 Look at that list again. Every single approach tried to **penalize scripts** — make the environment harder to memorize, make the objective function punish repetitive behavior, make the architecture attend to the right things. PPO's optimizer found a way around every single one. It always converged on a script because **in a deterministic environment, a script maximizes expected return.**
 
@@ -61,7 +72,8 @@ After 123 experiments and months of brainstorming, false positives, faulty diagn
 
 Not hitting the ball. Not scoring points. Not survival. Not penalizing scripts. Not making the environment harder. Not trying to trick the optimizer. Just directly rewarding the behavior I actually wanted.
 
-<pre><code>def step(self, action):
+```
+def step(self, action):
     obs, reward, terminated, truncated, info = self.env.step(action)
 
     ball_y = self._get_ram(101)          # ball Y position
@@ -70,9 +82,10 @@ Not hitting the ball. Not scoring points. Not survival. Not penalizing scripts. 
         ball_x = self._get_ram(99)        # ball X position
         distance = abs(paddle_x - ball_x)
         bonus = 0.05 * max(0.0, 1.0 - distance / 80.0)
-        reward += bonus                    # &lt;- that's it
+        reward += bonus                    # <- that's it
 
-    return obs, reward, terminated, truncated, info</code></pre>
+    return obs, reward, terminated, truncated, info
+```
 
 Three lines. A reward of up to 0.05 per frame — **twenty frames of perfect tracking equals one yellow brick.** On an average game with ~2,000 descent frames, perfect tracking earns about 50 bonus points. That's roughly 5–10% of the total game score.
 
@@ -86,7 +99,7 @@ Every previous approach tried to change the **viability of scripts.** Make the e
 
 Proximity reward changes **what the optimum is.**
 
-A center-hold script gets *some* proximity reward incidentally — the ball passes near center on some descents. But a reactive tracking policy gets the **maximum bonus on every single descent frame.** Over a full game, the tracker earns 3–5× more proximity bonus than the center-hold script. The optimization pressure is unambiguous: **track the ball, get more reward.** There's no clever script that can fake being close to the ball.
+A center-hold script gets *some* proximity reward incidentally — the ball passes near center on some descents. But a reactive tracking policy gets the **maximum bonus on every single descent frame.** Over a full game, the tracker earns 3–5x more proximity bonus than the center-hold script. The optimization pressure is unambiguous: **track the ball, get more reward.** There's no clever script that can fake being close to the ball.
 
 The bonus is dense (every frame) while the game's natural reward — brick breaks — is sparse (every few seconds). Dense rewards provide better gradients. The model doesn't need to discover the multi-step causal chain "track ball -> hit ball -> ball breaks brick -> score." It's told directly: being near the ball is good.
 
@@ -108,14 +121,11 @@ The dead baseline (center-hold script) scored 0.0% reversal at all magnitudes. T
 
 ### The Numbers (clean eval, no proximity reward)
 
-<table>
-<tr><th>Metric</th><th>Value</th></tr>
-<tr><td>Best stochastic score</td><td><b>216</b> (highest ever on clean Breakout in this project with only 25 million training steps)</td></tr>
-<tr><td>det=True MULTIPLE_SCRIPTS</td><td>10 of last 12 checkpoints (first time without sticky masking)</td></tr>
-<tr><td>FULL-wall deterministic score</td><td>379–383</td></tr>
-<tr><td>No-timing ALT retention</td><td><b>100%</b> (clears every layout)</td></tr>
-<tr><td>Intervention AUC</td><td><b>0.421</b> (STRONG)</td></tr>
-</table>
+- **Best stochastic score:** 216 (highest ever on clean Breakout in this project with only 25 million training steps)
+- **det=True MULTIPLE_SCRIPTS:** 10 of last 12 checkpoints (first time without sticky masking)
+- **FULL-wall deterministic score:** 379–383
+- **No-timing ALT retention:** 100% (clears every layout)
+- **Intervention AUC:** 0.421 (STRONG)
 
 ## What This Means for Your PPO Projects
 
@@ -127,18 +137,20 @@ And if you find memorization, the fix might not be more environment engineering.
 
 ## Try It Yourself
 
-<pre><code>git clone https://github.com/mharrell/breakout-reactive-ppo.git
+```
+git clone https://github.com/mharrell/breakout-reactive-ppo.git
 cd breakout-reactive-ppo
 pip install -r requirements.txt
 
-# Train (25M steps, ~6–7 hours on RTX 3060 Ti)
+# Train (25M steps, ~6-7 hours on RTX 3060 Ti)
 python train.py
 
 # Verify reactivity
 python verify_split_watcher.py --model ./models/best_model.zip --games 20
 
 # Watch it live
-python watch_model_split.py --model ./models/best_model.zip --record</code></pre>
+python watch_model_split.py --model ./models/best_model.zip --record
+```
 
 Everything you need is in the repo: the wrapper, the training script, the split-watcher, and the data. No dependencies on the parent project. Clean, minimal, reproducible.
 
