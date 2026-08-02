@@ -152,4 +152,4 @@ The full history — all 123 failures, the diagnostic methodology, the blind spo
 
 ---
 
-*P.S. — I'm trying to get this posted on arXiv as a standalone paper so it's citable and findable. If you're an active arXiv author in cs.AI or cs.LG and found this work useful, I'd be grateful for an endorsement. My email is mikey.harrell@gmail.com. Thanks for reading.*
+*P.S. — I'm trying to get this posted on arXiv as a standalone paper so it's citable and findable. If you're an active arXiv author in cs.AI or cs.LG and found this work useful, you can endorse me here: https://arxiv.org/auth/endorse?x=MUM8BP — it takes one click. Or email me at mikey.harrell@gmail.com. Thanks for reading.*
