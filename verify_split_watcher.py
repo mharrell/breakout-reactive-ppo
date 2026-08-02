@@ -6,7 +6,7 @@ per-side predictions. Same model weights, same argmax action selection,
 two different game states.
 
 A memorized script:  identical paddle positions on both sides.
-                     px_corr > 0.99, ALT score ≈ FULL score.
+                     px_corr > 0.99, ALT score ~= FULL score.
 A reactive policy:   paddle positions diverge because the ball bounces
                      differently on different brick layouts.
 
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     print(f"Games per layout pair: {N_GAMES}")
     print()
     print("Principle: INDEPENDENT predictions per side. No NoopResetEnv.")
-    print("  Memorized: px_corr > 0.99 AND ALT score ≈ FULL score")
+    print("  Memorized: px_corr > 0.99 AND ALT score ~= FULL score")
     print("  Reactive:  paddle positions DIVERGE on different brick layouts")
     print()
 
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     avg_retention = np.mean([a / f * 100 for a, f in zip(alt_scores_all, full_scores_all)
                              if f > 0]) if full_scores_all else 0
 
-    print(f"  Games with perfect transfer (px_corr>0.99, ALT≈FULL): {n_perfect}/{n_total}")
+    print(f"  Games with perfect transfer (px_corr>0.99, ALT~=FULL): {n_perfect}/{n_total}")
     print(f"  Avg action divergence: {avg_div:.1f}%")
     print(f"  Avg ALT score retention: {avg_retention:.0f}%")
     print(f"  Avg FULL score: {avg_full:.0f}")
@@ -339,6 +339,6 @@ if __name__ == "__main__":
 
     print()
     print("How to read this:")
-    print("  Perfect transfer (px_corr>0.99, ALT≈FULL) = DEFINITIVE memorization")
+    print("  Perfect transfer (px_corr>0.99, ALT~=FULL) = DEFINITIVE memorization")
     print("  A reactive policy CANNOT move identically on different brick layouts.")
     print("  This no-timing variant eliminates NoopResetEnv timing as a confound.")
