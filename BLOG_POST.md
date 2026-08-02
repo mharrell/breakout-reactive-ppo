@@ -149,3 +149,7 @@ The full history — all 123 failures, the diagnostic methodology, the blind spo
 ---
 
 *Mike Harrell is an independent ML researcher. He does not have a master's degree or a PhD, but if he did, you can bet he'd be the kind of guy that would shout "Just what the doctor ordered!" every time he opened a package in the mail. You can find the code at [github.com/mharrell/breakout-reactive-ppo](https://github.com/mharrell/breakout-reactive-ppo) and the split-watcher video at [youtube.com/watch?v=6ixVwQm7u5Y](https://www.youtube.com/watch?v=6ixVwQm7u5Y).*
+
+---
+
+*P.S. — I'm trying to get this posted on arXiv as a standalone paper so it's citable and findable. If you're an active arXiv author in cs.AI or cs.LG and found this work useful, I'd be grateful for an endorsement. My email is mikey.harrell@gmail.com. Thanks for reading.*
