@@ -2,6 +2,7 @@
 
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb}
+\DeclareMathOperator{\argmax}{arg\,max}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{hyperref}
@@ -25,11 +26,9 @@
     xleftmargin=1em,
 }
 
-\title{\bf Dense Reward Shaping Eliminates Policy Memorization\\
-in PPO Agents on Atari Breakout%
-\thanks{Code and reproduction: \url{https://github.com/mharrell/breakout-reactive-ppo}.
-Full project history: \url{https://github.com/mharrell/BreakoutBot}.
-Split-watcher demonstration: \url{https://www.youtube.com/watch?v=6ixVwQm7u5Y}.}}
+\title{\textbf{Dense Proximity Reward Produces Reactive PPO Policies\\
+in Atari Breakout}\thanks{Code and reproduction: \url{https://github.com/mharrell/breakout-reactive-ppo}.
+Full project history: \url{https://github.com/mharrell/BreakoutBot}.}}
 
 \author{Mike Harrell\\
 \texttt{mikey.harrell@gmail.com}}
@@ -42,26 +41,28 @@ Split-watcher demonstration: \url{https://www.youtube.com/watch?v=6ixVwQm7u5Y}.}
 
 \begin{abstract}
 Proximal Policy Optimization (PPO) agents trained on deterministic Atari environments
-routinely converge to memorized action sequences---fixed scripts that replay the same
-buttons in the same order regardless of game state---rather than developing reactive,
-ball-tracking policies. Despite the widespread use of sticky actions as a standard
-mitigation, we present evidence from 124 controlled experiments showing that no
-environment-modification approach---sticky actions, entropy tuning, cursor
-wrappers, dynamics randomization, adversarial obstacles, or frame
-skipping---produces a genuinely reactive argmax on Atari Breakout. Every
-diagnostic in the standard RL toolbox measures the policy distribution, not the
-argmax; the models appear reactive while evaluating to deterministic scripts.
+routinely converge to memorized action sequences (fixed scripts that replay the same
+buttons in the same order regardless of game state) rather than developing reactive,
+ball-tracking policies. Across 123 controlled experiments spanning every major
+environment-modification approach (sticky actions, entropy tuning, cursor
+wrappers, dynamics randomization, adversarial obstacles, and frame
+skipping), no model produced a genuinely reactive argmax on Atari Breakout.
+We identify a fundamental confound underlying these failures: every diagnostic
+in the standard RL toolbox measures the policy distribution, not the
+argmax, so models routinely appear reactive while evaluating to deterministic scripts.
 We introduce the \emph{split-watcher}, a diagnostic that measures the argmax
 directly by running the same model on two different brick layouts with
 independent per-side predictions, and show that it detects memorization where
-distribution-level diagnostics fail. We then demonstrate that a simple dense
-proximity reward---three lines of code that reward the paddle for horizontal
-closeness to the ball during descent---produces the first verified reactive PPO
+distribution-level diagnostics fail. We then demonstrate that a compact dense
+proximity reward, which rewards the paddle for horizontal
+closeness to the ball during descent, produces the first verified reactive PPO
 argmax on Atari Breakout. The model achieves 0/240 perfect transfers on the
 split-watcher (100\% no-timing ALT retention), an intervention gradient AUC of 0.421,
-and a stochastic best score of 216 on clean evaluation. The key insight is that
-reward shaping changes what the optimizer considers optimal, rather than trying
-to make memorized behavior non-viable through environment engineering.
+and a stochastic best score of 216 on clean evaluation. Directly rewarding the
+desired behavior succeeds where penalizing memorized
+behavior fails: PPO optimizes whatever is in the reward function. Making
+ball-tracking explicitly rewarding, rather than trying to make scripts
+non-viable through environment engineering, is what ultimately works.
 \end{abstract}
 
 %-------------------------------------------------------------------------------
@@ -69,10 +70,12 @@ to make memorized behavior non-viable through environment engineering.
 
 Proximal Policy Optimization (PPO)~\cite{schulman2017ppo} is one of the most
 widely used deep reinforcement learning algorithms, and the Arcade Learning
-Environment (ALE)~\cite{bellemare2013ale} remains a standard benchmark. However,
+Environment (ALE)~\cite{bellemare2013ale} remains a standard benchmark, popularized
+by the DQN agent~\cite{mnih2015human} which demonstrated human-level play across
+dozens of Atari games. However,
 a well-known issue with training on deterministic ALE games is \emph{policy
 memorization}: rather than learning to react to visual input, the agent learns
-a fixed action sequence---a ``script''---that exploits deterministic environment
+a fixed action sequence (a ``script'') that exploits deterministic environment
 dynamics to achieve a consistent score without any genuine perception of game
 state~\cite{machado2018revisiting,zhang2018overfitting}.
 
@@ -84,14 +87,15 @@ agents: convolutional networks are ``automatically robust'' to 25\% action noise
 and a memorized sequence survives with only minor score degradation.
 
 This paper reports the results of a systematic investigation into policy
-memorization in PPO agents on Atari Breakout. Over 124 controlled experiments
-spanning every major proposed mitigation, we found that \emph{no}
-environment-modification approach produced a reactive argmax. Every model
+memorization in PPO agents on Atari Breakout. Over 123 controlled experiments
+spanning every major proposed environment-modification mitigation, we found that
+\emph{no} such approach produced a reactive argmax. Every model
 that appeared reactive under standard diagnostics was revealed as a memorized
-script when the argmax---rather than the policy distribution---was tested
-directly.
+script when the argmax (rather than the policy distribution) was tested
+directly. A 124th experiment, using a fundamentally different strategy (dense
+behavioral reward instead of environment engineering), succeeded.
 
-The contribution of this work is threefold:
+The contributions of this work are:
 \begin{enumerate}
     \item We identify a fundamental confound in the standard RL diagnostic
     toolkit: every commonly used metric measures the \emph{policy distribution},
@@ -100,8 +104,8 @@ The contribution of this work is threefold:
     \item We introduce the \emph{split-watcher}, a simple diagnostic that
     measures argmax behavior directly by running the same model on two
     different initial states with independent per-side predictions.
-    \item We show that a three-line dense proximity reward---directly rewarding
-    the paddle for being horizontally close to the descending ball---produces
+    \item We show that a compact dense proximity reward (directly rewarding
+    the paddle for being horizontally close to the descending ball) produces
     the first verified reactive PPO argmax on Atari Breakout, achieving
     0/240 perfect transfers on the split-watcher.
 \end{enumerate}
@@ -132,15 +136,19 @@ algorithm~\cite{ecoffet2021goexplore} achieved superhuman performance on Montezu
 Revenge but did so through explicit state-space exploration, not reactive
 policy learning.
 
-\subsection{Reward Shaping}
+\subsection{Dense Auxiliary Rewards}
 
-Reward shaping---adding auxiliary rewards to guide learning---has a long history
-in RL~\cite{ng1999shaping}. In deep RL, auxiliary tasks and dense rewards have
+Adding auxiliary rewards to guide learning has a long history
+in RL. Ng, Harada, and Russell~\cite{ng1999shaping} showed that
+\emph{potential-based} reward shaping preserves the optimal policy (a
+desirable property when the goal is to accelerate convergence without changing
+what the agent learns). In deep RL, auxiliary tasks and dense rewards have
 been used to improve sample efficiency and final performance~\cite{jaderberg2017auxiliary}.
-The present work differs in motivation: rather than using reward shaping to
-accelerate learning, we use it to \emph{change the optimum itself}---making
-ball-tracking the reward-maximizing behavior rather than trying to make scripts
-non-viable.
+The present work uses an auxiliary reward for the opposite purpose: rather than
+preserving the original optimum while accelerating learning, we deliberately add
+a non-potential-based reward to \emph{change the optimum itself}, making
+ball-tracking the locally reward-maximizing behavior during training rather
+than trying to make scripts non-viable through environment engineering.
 
 \subsection{Diagnosing Memorization}
 
@@ -149,7 +157,7 @@ episode reward, unique score count) that do not distinguish reactive behavior
 from memorized scripts. The memorization check used in this project's earlier
 work~\footnote{Full project history and methodology at
 \url{https://github.com/mharrell/BreakoutBot}} counts unique deterministic
-scores across evaluation episodes---but we found that score variance from
+scores across evaluation episodes, but we found that score variance from
 life-loss timing and ball-bounce stochasticity produces false MULTIPLE\_SCRIPTS
 verdicts for confirmed-memorized models. The split-watcher introduced here is,
 to our knowledge, the first diagnostic that directly measures argmax behavior
@@ -162,11 +170,11 @@ rather than properties of the policy distribution or score distribution.
 
 The split-watcher runs the same trained model on two different Breakout layouts
 simultaneously, making independent predictions for each side. The left side
-presents a full brick wall; the right side presents an altered layout---half
-the bricks cleared, or a different arrangement. Both sides use the same model
+presents a full brick wall; the right side presents an altered layout (half
+the bricks cleared, or a different arrangement). Both sides use the same model
 weights and the same argmax action selection.
 
-The key insight is that different brick layouts cause different ball
+Different brick layouts cause different ball
 bounces. On the altered side, the ball hits different bricks at different
 angles and arrives at the paddle from different positions. A reactive policy
 that tracks the ball \emph{must} move differently on the two sides. A memorized
@@ -181,7 +189,7 @@ We compute the Pearson correlation of paddle X-positions between the two sides:
 \end{equation}
 
 A px\_corr $>$ 0.99 with ALT score $\approx$ FULL score is classified as a
-\emph{perfect transfer}---definitive memorization, physically impossible for a
+\emph{perfect transfer}: definitive memorization, physically impossible for a
 reactive policy.
 
 We evaluate across three layout types:
@@ -228,12 +236,12 @@ toward the paddle ($\text{ball\_y} > 100$), a bonus is computed:
 The bonus ranges from 0.0 (paddle and ball separated by $\geq$80 pixels, half
 the playfield width) to 0.05 (paddle centered directly under the ball). At
 $\sim$2,000 descent frames per game, perfect tracking earns approximately 50
-bonus points---roughly 5--10\% of a typical game score and equivalent to 7
-yellow bricks. The scale is intentionally small: large enough to shift the
-optimum over thousands of frames, small enough not to overwhelm the game's
+bonus points, roughly 5--10\% of a typical game score and equivalent to 7
+yellow bricks. The scale is intentionally small: large enough to steer the
+policy toward ball-tracking over the course of a game (thousands of frames per episode), small enough not to overwhelm the game's
 natural reward signal (1.0--7.0 per brick).
 
-Critically, the proximity bonus is applied \emph{during training only}.
+The proximity bonus is applied \emph{during training only}.
 Evaluation and memorization checks use clean Breakout (no wrapper), testing
 whether the tracking behavior transfers to the original reward function.
 
@@ -245,7 +253,7 @@ whether the tracking behavior transfers to the original reward function.
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
-Algorithm & PPO (Stable-Baselines3) \\
+Algorithm & PPO (Stable-Baselines3~\cite{raffin2021sb3}) \\
 Architecture & NatureCNN \\
 Environments & 32 (DummyVecEnv) \\
 n\_steps & 128 \\
@@ -257,7 +265,9 @@ Learning rate & $2.5\times10^{-4} \rightarrow 10^{-5}$ (linear) \\
 Clip range & $0.2 \rightarrow 0.05$ (linear) \\
 Total steps & 25,000,000 \\
 Environment & ALE/Breakout-v5, frameskip=4, no sticky actions \\
-Training wrapper & EpisodicLifeEnv + ProximityRewardWrapper \\
+Training wrappers & NoopResetEnv, FireResetEnv, EpisodicLifeEnv, \\
+& GrayscaleResize(84$\times$84), ClipRewardEnv, \\
+& \textbf{ProximityRewardWrapper} (applied \emph{after} ClipRewardEnv) \\
 Eval wrapper & EpisodicLifeEnv (clean Breakout, no proximity reward) \\
 Hardware & Single NVIDIA RTX 3060 Ti, Windows 11 \\
 Training time & $\sim$6.5 hours for 25M steps \\
@@ -267,46 +277,69 @@ Training time & $\sim$6.5 hours for 25M steps \\
 \label{tab:config}
 \end{table}
 
+The wrapper ordering in Table~\ref{tab:config} is load-bearing:
+\texttt{ClipRewardEnv} clips per-step rewards to their sign ($\{-1, 0, +1\}$),
+so the 0.05 proximity bonus would be rounded to zero if
+\texttt{ProximityRewardWrapper} were applied before it. Placing
+\texttt{ProximityRewardWrapper} after \texttt{ClipRewardEnv} ensures the bonus
+is added post-clip and reaches the optimizer unmodified. The full wrapper stack
+matches the companion repository's \texttt{train.py}.
+
 %-------------------------------------------------------------------------------
 \section{Results}
 
 \subsection{Split-Watcher Verification}
+\label{sec:split}
 
 \begin{table}[h]
 \centering
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
 \textbf{Checkpoint} & \textbf{Games} & \textbf{Perfect Transfers} &
-\textbf{ALT Retention} & \textbf{Divergence} \\
+\textbf{px\_corr} & \textbf{ALT Retention} & \textbf{Divergence} \\
 \midrule
-\multicolumn{5}{c}{\textit{No-timing variant (no NoopResetEnv)}} \\
+\multicolumn{6}{c}{\textit{No-timing variant (no NoopResetEnv)}} \\
 \midrule
-best (19.2M) & 60 & 0 & 100\% & 62.4\% \\
-final (25M)  & 60 & 0 & 100\% & 62.9\% \\
+best (19.2M) & 60 & 0 & 0.943 & 100\% & 62.4\% \\
+final (25M)  & 60 & 0 & 0.959 & 100\% & 62.9\% \\
 \midrule
-\multicolumn{5}{c}{\textit{With NoopResetEnv (0--30 frame offset)}} \\
+\multicolumn{6}{c}{\textit{With NoopResetEnv (0--30 frame offset)}} \\
 \midrule
-best (19.2M) & 60 & 0 & 46\% & 71.4\% \\
-final (25M)  & 60 & 0 & 59\% & 70.6\% \\
+best (19.2M) & 60 & 0 & 0.945 & 46\% & 71.4\% \\
+final (25M)  & 60 & 0 & 0.961 & 59\% & 70.6\% \\
 \bottomrule
 \end{tabular}
-\caption{Split-watcher results for PPO\_124. 0/240 total perfect transfers.}
+\caption{Split-watcher results for PPO\_124. px\_corr is the mean Pearson
+correlation of paddle X-positions across the three layout types (RIGHT\_HALF,
+LEFT\_HALF, RANDOM\_50). Perfect transfer threshold: px\_corr $>$ 0.99 and
+ALT score $\approx$ FULL score. 0/240 total perfect transfers.}
 \label{tab:split}
 \end{table}
 
 Table~\ref{tab:split} shows the split-watcher results. Across 240 games (120
 no-timing, 120 with NoopResetEnv), the model produced \textbf{zero perfect
-transfers}. In the no-timing variant, ALT score retention was 100\%---the model
+transfers}. In the no-timing variant, ALT score retention was 100\%: the model
 cleared every brick on every layout, every game. With NoopResetEnv, retention
-dropped to 46--59\% due to frame-stack corruption on the first serve
-(0--30 random NOOP frames can cause the model to miss the initial ball
-trajectory), but the improved retention from 46\% to 59\% between checkpoints
-indicates increasing robustness to timing variation.
+dropped to 46--59\%. The 0--30 random NOOP frames added at reset corrupt the
+initial frame stack (four stacked frames may span the serve, causing the model
+to miss the ball's initial trajectory) and shift the episode's starting phase
+relative to any serve-timing patterns learned during training. Whether the drop
+reflects purely a perceptual artifact (frame-stack corruption) or partial
+memorization of serve timing is unresolved; both mechanisms predict the observed
+sensitivity. The improvement from 46\% to 59\% between checkpoints is
+consistent with increasing robustness under either account.
 
-For comparison, every prior model (PPO\_111--118, cursor generation; BeamRider
-baseline and MULTILIFE) showed at least one perfect transfer under the
-split-watcher. PPO\_124 is the first model in the project's history to achieve
-zero perfect transfers across all test conditions.
+The mean px\_corr of 0.94--0.96 is below the 0.99 perfect-transfer threshold
+but still indicates substantial correlation between paddle trajectories on
+different layouts. A fully reactive policy may retain nontrivial px\_corr
+because the ball's gross left-right motion is similar across layouts during the
+opening serve and early bounces; the action-level divergence (62--71\%) is the
+more direct measure of behavioral adaptation. For comparison, memorized cursor
+models (PPO\_111--118) and BeamRider models (baseline and
+BEAMRIDER\_MULTILIFE) all produced at least one perfect transfer (px\_corr
+$>$ 0.99) under the split-watcher. PPO\_124 is the first model in the
+project's history to achieve zero perfect transfers across all test
+conditions.
 
 \subsection{Intervention Gradient}
 
@@ -331,21 +364,29 @@ Dead baseline is a center-hold script that ignores the teleport.}
 \label{tab:intervention}
 \end{table}
 
-Table~\ref{tab:intervention} shows the dose-response curve. The reversal rate
-peaks at 60.0\% at $\pm$15px displacement---a moderate perturbation where the
-ball is clearly in a new position but still within a physically plausible
-range. The rate declines smoothly at larger displacements ($\pm$45--60px),
-where the ball appears in physically impossible positions. This is the
-signature of a reactive policy: the model recognizes the ball moved and
-reverses direction to follow it, but when the displacement is too extreme, it
-does not chase a ball that appears to violate physics. The dead baseline shows
-0.0\% reversal at all magnitudes, confirming that the intervention test
-correctly identifies non-reactive behavior.
+Table~\ref{tab:intervention} shows the dose-response curve. The $\Delta x=0$
+condition is a control: the ball is ``teleported'' to its current position
+(i.e., not moved), measuring the model's natural rate of paddle direction
+changes during normal play. A reactive tracker changes direction 37.5\% of the
+time simply because the ball moves; this is the baseline, not noise. The dead
+baseline (center-hold script) never changes direction, producing 0.0\%
+reversal at all magnitudes.
 
-The AUC of 0.421 is classified as STRONG and represents a clean dose-response
-curve that memorized models never produce. Prior cursor models (PPO\_107--117)
+Relative to the $\Delta x=0$ baseline, the net intervention effect is strongest
+at $\pm$15px (+22.5 percentage points above baseline), declines to
++12.5pp at $\pm$30px, and becomes negative at $\pm$45--60px. The model
+reverses direction to follow moderate displacements but does not chase a ball
+that appears in physically impossible positions. This is the signature of a
+reactive policy. The dead baseline confirms that the test correctly identifies
+non-reactive behavior at every magnitude.
+
+The AUC of 0.421 is computed from raw reversal rates and should be interpreted
+with the 37.5\% natural-reversal baseline in mind. Sample sizes are
+approximately 16--20 moving teleports per magnitude (teleports where the paddle
+was in motion pre-intervention); rates should be interpreted as exploratory
+given the small denominators. Prior cursor models (PPO\_107--117)
 showed 33--50\% reversal rates on the intervention probe but were confirmed
-memorized by the split-watcher---those models had reactive \emph{distributions}
+memorized by the split-watcher; those models had reactive \emph{distributions}
 but memorized \emph{argmax modes}.
 
 \subsection{Memorization Check}
@@ -353,10 +394,13 @@ but memorized \emph{argmax modes}.
 Table~\ref{tab:memcheck} shows the memorization check results (deterministic
 inference on clean Breakout, no proximity reward). PPO\_124 is the first model
 in the project's history to sustain MULTIPLE\_SCRIPTS on det=True without
-sticky action masking, with 10 of the last 12 checkpoints (14M--25M steps)
-producing multiple unique scores. Earlier models achieving MULTIPLE\_SCRIPTS
+sticky action masking. Of the 13 checkpoints in the 14M--25M range, 10
+produced multiple unique scores (Table~\ref{tab:memcheck} shows a
+representative subset). Earlier models achieving MULTIPLE\_SCRIPTS
 did so only with sticky actions enabled (a known confound: sticky noise
-produces 8--14 unique scores from a dead policy).
+produces 8--14 unique scores from a dead policy). Under stochastic inference
+(det=False) on clean Breakout, the model achieves a best score of 216, the
+highest recorded in this project without sticky masking.
 
 \begin{table}[h]
 \centering
@@ -377,7 +421,25 @@ produces 8--14 unique scores from a dead policy).
 \label{tab:memcheck}
 \end{table}
 
+The best scores in Table~\ref{tab:memcheck} (87--107) appear substantially lower
+than the split-watcher full-wall scores (379--383, Section~\ref{sec:split}). This
+is not a contradiction: the memorization check uses the standard ALE evaluation
+setup (NoopResetEnv with 0--30 random NOOP frames at reset), while the no-timing
+split-watcher removes NoopResetEnv entirely. The same 0--30 frame offset that
+drops ALT retention from 100\% to 46--59\% also degrades full-wall performance
+by a comparable margin. The no-timing variant reveals the model's capability
+when frame-stack corruption is eliminated; the standard-eval scores reflect a
+known sensitivity to initial serve timing. We note that the 19M checkpoint
+(SINGLE\_SCRIPT on memcheck) and the 19.2M checkpoint (0/240 on split-watcher,
+Table~\ref{tab:split}) are separated by only 200k steps. The two diagnostics
+use different environment configurations (with and without NoopResetEnv), so
+their results are not directly comparable at a given checkpoint. The 19.2M
+checkpoint's memcheck result was not recorded; the model may oscillate between
+reactive and script-like behavior on short timescales, or the discrepancy may
+reflect the test-protocol difference alone.
+
 \subsection{Continuation Training}
+\label{sec:continuation}
 
 Extending training from 25M to 50M steps (PPO\_126, identical configuration)
 did \emph{not} improve reactivity. The best checkpoint at 47.4M showed
@@ -387,7 +449,7 @@ but the final checkpoint at 50M converged to a single memorized script
 was 0.327 (vs. 0.421 for PPO\_124 final). PPO's optimizer eventually finds a
 script that maximizes the combined game + proximity objective; the proximity
 reward delays but does not permanently prevent script convergence. This
-suggests checkpoint selection---rather than training to convergence---is
+suggests that checkpoint selection, rather than training to convergence, is
 critical for proximity-reward models.
 
 %-------------------------------------------------------------------------------
@@ -401,19 +463,29 @@ Every prior anti-memorization method in this project tried to change the
 sequences are punished (entropy bonuses, trajectory entropy), or make the
 environment geometrically complex (moving bumpers, brick randomization). PPO's
 optimizer always found a script that survived the changes: timing-robust,
-layout-conditioned, or noise-tolerant. The optimum was always a script---only
+layout-conditioned, or noise-tolerant. The optimum was always a script; only
 the shape changed.
 
-Proximity reward changes \emph{what the optimum is}. A center-hold script---the
-default PPO convergence point for Breakout---receives incidental proximity
-bonus when the ball happens to pass near center. But a reactive tracking policy
-receives the maximum bonus on every single descent frame, earning 3--5$\times$
-more proximity reward over a full game. There is no clever script that can fake
-being close to the ball. The optimization pressure is unambiguous: track the
-ball, get more reward.
+Proximity reward changes \emph{the training-time optimization landscape}. A
+center-hold script (the default PPO convergence point for Breakout) receives
+incidental proximity bonus when the ball happens to pass near center. But a
+reactive tracking policy receives the maximum bonus on every single descent
+frame, earning 3--5$\times$ more proximity reward over a full game. During
+early-to-mid training, the gradient toward ball-tracking is unambiguous and
+strong: track the ball, get more reward. The proximity bonus makes tracking
+the locally dominant behavior for tens of millions of steps.
 
-The bonus is dense (every frame) while the game's natural reward---brick
-breaks---is sparse (every few seconds). Dense rewards provide better gradients
+However, PPO\_126's regression at 50M steps (Section~\ref{sec:continuation})
+shows that the asymptotic optimum of the combined game + proximity objective
+can still be a script: one that positions the paddle where the ball is
+statistically most likely to arrive, earning high proximity bonuses without
+frame-by-frame reactivity. The proximity reward creates an extended
+\emph{reactive phase} during training but does not permanently eliminate
+scripts from the optimization landscape. Checkpoint selection during this
+phase is critical; the best policy may occur well before convergence.
+
+The bonus is dense (every frame) while the game's natural reward (brick
+breaks) is sparse (every few seconds). Dense rewards provide better gradients
 for credit assignment. The model does not need to discover the multi-step
 causal chain ``track ball $\rightarrow$ hit ball $\rightarrow$ ball breaks
 brick $\rightarrow$ score.'' It is told directly: being near the ball is good.
@@ -424,10 +496,10 @@ learns that the way to break bricks is to be under the ball when it comes down.
 \subsection{The Distribution-vs-Argmax Confound}
 
 A critical methodological finding of this work is that \emph{every} commonly
-used RL diagnostic---memorization check (unique score count), intervention
-probe (distribution shift after state perturbation), SCAD probe (mutual
-information between action and state), brick layout test (score
-retention)---measures properties of the \emph{policy distribution}, not the
+used RL diagnostic (memorization check via unique score count, intervention
+probe via distribution shift after state perturbation, SCAD probe via mutual
+information between action and state, brick layout test via score
+retention) measures properties of the \emph{policy distribution}, not the
 \emph{argmax action}. But evaluation uses the argmax. A model can maintain a
 reactive-looking distribution (90\% LEFT when ball is left, 90\% RIGHT when
 ball is right) while the argmax is always the same action regardless.
@@ -437,7 +509,7 @@ This was confirmed empirically: cursor-wrapper models (PPO\_107--117) showed
 memcheck, but were definitively memorized under split-watcher verification
 (perfect transfer on altered layouts). The intervention probe correctly
 measures that the distribution $P(a \mid s)$ changes when the ball position
-changes. It does not measure whether $\arg\max_a P(a \mid s)$ changes. For
+changes. It does not measure whether $\argmax_a P(a \mid s)$ changes. For
 models with high-confidence distributions (e.g., 90\% probability on the
 top action), substantial probability mass can redistribute among the remaining
 actions without ever crossing the argmax threshold.
@@ -450,11 +522,16 @@ of reactive behavior in deterministic RL environments.
 \subsection{Limitations}
 
 \begin{enumerate}
-    \item \textbf{Single game.} This work demonstrates the proximity reward
-    approach only on Atari Breakout. The principle---directly reward the
-    behavior you want---should generalize to other environments, but the
-    specific implementation (reading RAM addresses for ball/paddle position)
-    requires per-game engineering.
+    \item \textbf{Single game, RAM-dependent implementation.} This work
+    demonstrates the proximity reward approach only on Atari Breakout. The
+    principle (directly reward the behavior you want) should generalize, but
+    the specific implementation reads privileged ALE RAM addresses
+    (\texttt{ale.getRAM()[72]}, \texttt{[99]}, \texttt{[101]}) to obtain
+    ball and paddle positions. This requires per-game reverse-engineering
+    of RAM layouts and does not extend to games without documented RAM maps
+    or to environments that do not expose ground-truth entity positions.
+    Applying this approach to, e.g., Montezuma's Revenge would require an
+    entirely different state-access mechanism.
     \item \textbf{Scale sensitivity.} The scale of 0.05 was found to work; the
     sensitivity of reactivity to different scales (0.01, 0.10, 0.25) has not
     been systematically tested.
@@ -462,15 +539,35 @@ of reactive behavior in deterministic RL environments.
     shows that the proximity reward delays but does not permanently prevent
     script convergence. The duration of the ``reactive window'' and whether it
     can be extended through scale scheduling remains unexplored.
+    \item \textbf{Single training run.} PPO\_124 is a single training run
+    (seed=124). No replicate runs with different seeds were performed, so
+    seed sensitivity is unknown. The 123 prior experiments provide context
+    for the difficulty of the problem, but the success case itself has N=1.
+    \item \textbf{No baselines.} No non-PPO agent (DQN, human, oracle
+    ball-tracker) has been evaluated on the split-watcher. The ``0/240
+    perfect transfers'' result lacks a reference distribution for what a
+    known-reactive policy's px\_corr distribution looks like on these layouts.
     \item \textbf{No statistical significance testing.} Results are reported as
     raw counts and percentages without confidence intervals. The 0/240 perfect
     transfers result is qualitatively clear, but formal statistical treatment
-    would strengthen the conclusions.
+    would strengthen the conclusions. Intervention gradient reversal rates
+    are reported without per-magnitude sample sizes; these should be
+    interpreted as exploratory.
     \item \textbf{No ALE sticky evaluation protocol.} The standard ALE
     evaluation protocol (sticky actions enabled during evaluation) was not
     used here, as sticky actions are a known memorization masker. Clean
     evaluation (no sticky actions) provides the most direct test of argmax
     behavior.
+    \item \textbf{BrickClearWrapper bug in prior results.} An early version of
+    the split-watcher contained a bug in \texttt{BrickClearWrapper}: the
+    \texttt{reset()} method returned the pre-clear observation, causing both
+    sides to see identical frame-1 observations. This bug was present in all
+    split-watcher runs for PPO\_111--118 and BeamRider models, and was fixed
+    before PPO\_124 testing. The prior models have not been re-tested with
+    the fixed wrapper, so their perfect-transfer counts may be inflated.
+    The qualitative conclusion that those models were memorized is
+    independently supported by single-script memcheck scores and zero
+    intervention reversal on center-hold dead baselines.
 \end{enumerate}
 
 \subsection{Future Work}
@@ -488,38 +585,46 @@ The proximity reward approach opens several directions:
     could a scheduled decrease in proximity scale (start high to establish
     tracking, reduce to let game reward dominate) produce a stable reactive
     policy?
-    \item \textbf{Combination with auxiliary supervision.} PPO\_102/103 showed
-    that NatureCNN can track the ball at 1.9px MAE when supervised. Combining
-    proximity reward (shapes the policy) with auxiliary ball-position
-    supervision (shapes the features) might produce even stronger reactivity.
-    \item \textbf{Formal theory.} Under what conditions does a dense shaped
-    reward shift the global optimum of PPO's objective from a memorized script
-    to a reactive policy? A theoretical treatment of the reward-shaping
-    landscape for deterministic MDPs would be valuable.
+    \item \textbf{Combination with auxiliary supervision.} Earlier experiments
+    with auxiliary ball-position regression heads (PPO\_102 and PPO\_103)
+    showed that NatureCNN can track the ball at 1.9px MAE when directly
+    supervised, but the policy still memorized. Combining proximity reward
+    (which shapes the policy) with auxiliary ball-position
+    supervision (which shapes the features) might produce even stronger
+    reactivity.
+    \item \textbf{Formal theory.} Under what conditions does a dense auxiliary
+    reward create a reactive phase during training, and can the reactive
+    optimum be made stable? A theoretical treatment of the optimization
+    landscape for deterministic MDPs with auxiliary behavioral rewards would
+    be valuable.
 \end{itemize}
 
 %-------------------------------------------------------------------------------
 \section{Conclusion}
 
-After 124 controlled PPO experiments on Atari Breakout spanning every major
-proposed anti-memorization method, we found that no environment-modification
-approach produced a genuinely reactive argmax. Every diagnostic in the standard
-RL toolbox measures the policy distribution, not the argmax---a confound that
+After 123 controlled PPO experiments on Atari Breakout spanning every major
+proposed environment-modification approach, we found that no such method
+produced a genuinely reactive argmax. Every diagnostic in the standard
+RL toolbox measures the policy distribution, not the argmax. This confound
 led to false positive reactivity claims across multiple experimental
 generations.
 
-The fix was three lines of reward shaping: a dense proximity bonus that rewards
-the paddle for horizontal closeness to the ball during descent. This directly
-makes ball-tracking the reward-maximizing behavior, rather than trying to make
-scripts non-viable through environment engineering. The resulting model
-(PPO\_124) achieved 0/240 perfect transfers on the split-watcher, 100\%
-no-timing ALT retention, and an intervention gradient AUC of 0.421---the first
-verified reactive PPO argmax on Atari Breakout.
+The fix was a compact dense proximity bonus: reward the paddle for horizontal
+closeness to the ball during descent. This makes ball-tracking explicitly
+rewarding during training, rather than trying to make scripts non-viable
+through environment engineering. The resulting model (PPO\_124) achieved 0/240
+perfect transfers on the split-watcher, 100\% no-timing ALT retention, and an
+intervention gradient AUC of 0.421, the first verified reactive PPO argmax on
+Atari Breakout. However, continued training (PPO\_126, 50M steps) showed
+regression to a memorized script, indicating that the proximity reward creates
+a reactive phase rather than a permanent change to the asymptotic optimum.
+Checkpoint selection, rather than training to convergence, is critical.
 
-The core lesson is simple: PPO optimizes whatever you put in the reward
-function. In a deterministic environment, that optimum is a script---unless you
-change the reward to make it something else. Reward what you want, don't
-penalize what you don't want.
+PPO optimizes whatever is in the reward function. In a
+deterministic environment, environment engineering alone changes which script is
+optimal; adding a dense behavioral reward makes the desired reactive behavior
+locally dominant during training. Directly rewarding the behavior you want may
+succeed where penalizing memorization has failed.
 
 %-------------------------------------------------------------------------------
 \bibliographystyle{unsrt}

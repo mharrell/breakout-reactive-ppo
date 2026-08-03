@@ -134,7 +134,7 @@ Clean dose-response curve: peaks at moderate displacement (the ball moved), drop
 # Install
 pip install -r requirements.txt
 
-# Train (25M steps, ~8–12 hours on RTX 3060 Ti)
+# Train (25M steps, ~6.5 hours on RTX 3060 Ti)
 python train.py
 
 # Verify reactivity
@@ -151,7 +151,7 @@ python watch_model_split.py --model ./models/best_model.zip --record
 - Stable-Baselines3 2.3+
 - ALE 0.11+
 - GPU with 8GB+ VRAM (RTX 3060 Ti or better)
-- ~8–12 hours for 25M steps on a single GPU
+- ~6.5 hours for 25M steps on a single GPU
 
 ## What We Learned
 
@@ -176,10 +176,10 @@ This repo is the clean, minimal reproduction. No baggage, no dead experiments. J
 If you use this work, please cite:
 
 ```bibtex
-@misc{harrell2025proximity,
-  title={Dense Reward Shaping Produces Reactive PPO Policies in Atari Breakout},
+@misc{harrell2026proximity,
+  title={Dense Proximity Reward Produces Reactive PPO Policies in Atari Breakout},
   author={Harrell, Mike},
-  year={2025},
+  year={2026},
   howpublished={\url{https://github.com/mharrell/breakout-reactive-ppo}},
 }
 ```

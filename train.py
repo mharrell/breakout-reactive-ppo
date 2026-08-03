@@ -21,6 +21,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from stable_baselines3.common.callbacks import EvalCallback, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.utils import get_linear_fn
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv, NoopResetEnv, FireResetEnv, EpisodicLifeEnv,
 )
@@ -129,6 +130,8 @@ if __name__ == "__main__":
     print(f"  Eval:     Clean Breakout (no bonus) — transfer test")
     print(f"  PPO:      ent_coef={ENT_COEF}, n_envs={N_ENVS}, "
           f"n_steps={N_STEPS}, n_epochs={N_EPOCHS}")
+    print(f"  LR:       2.5e-4 → 1e-5 (linear)")
+    print(f"  Clip:     0.2 → 0.05 (linear)")
     print(f"  Target:   {args.steps:,} steps")
     print()
 
@@ -171,6 +174,8 @@ if __name__ == "__main__":
         print("Training from scratch (NatureCNN, random init)")
         model = PPO(
             "CnnPolicy", env,
+            learning_rate=get_linear_fn(2.5e-4, 1e-5),
+            clip_range=get_linear_fn(0.2, 0.05),
             ent_coef=ENT_COEF,
             n_steps=N_STEPS,
             batch_size=BATCH_SIZE,

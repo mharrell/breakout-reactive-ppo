@@ -2,9 +2,11 @@
 
 **I spent six months trying to make PPO play Breakout reactively. Every single approach failed — until I tried the simplest possible thing.**
 
-* * *
+---
 
-Collapsed. Memorized. SINGLE_SCRIPT. Not Tracking the Ball. False Positive. I spent six months trying to train a PPO agent to do something I thought would be pretty simple effort for my first "AI" experience: get it to actually play Breakout. But it just wouldn't. It learned a memorized action sequence — a script. The same buttons, in the same order, every game, regardless of where the ball goes. The paddle moves the same way on a full brick wall as it does on a completely different layout. That's not reactive behavior. That's a player piano. Turns out this is the norm and rather expected. I could have taken it as a rookie mistake and tried something new, but I didn't want to. 
+I spent six months trying to train a PPO agent to do something I thought would be pretty simple for my first "AI" experience: get it to actually play Breakout. But it just wouldn't.
+
+Collapsed. Memorized. SINGLE_SCRIPT. False Positive. Not tracking the ball. Every model learned a memorized action sequence — a script. The same buttons, in the same order, every game, regardless of where the ball goes. The paddle moves the same way on a full brick wall as it does on a completely different layout. That's not reactive behavior. That's a player piano. Turns out this is the norm and rather expected. I could have taken it as a rookie mistake and tried something new, but I didn't want to.
 
 I wanted it to work, dangit. Not just like a robot that could input a sequence of movements over and over. But really watch the ball and *play the game.*
 
@@ -127,6 +129,16 @@ The dead baseline (center-hold script) scored 0.0% reversal at all magnitudes. T
 - **No-timing ALT retention:** 100% (clears every layout)
 - **Intervention AUC:** 0.421 (STRONG)
 
+### A Cautionary Note: PPO_126 and the Regression
+
+Scientific honesty requires mentioning what happened when I kept training.
+
+I continued PPO_124 from 25M to 50M steps (renamed PPO_126) to see if more training improved reactivity further. It didn't. By 50M steps, the model had regressed to a memorized script — px_corr = 0.95, identical paddle positions on every layout. The best checkpoint was at 47.4M, showing partial reactivity (decoupled on right-half layouts, scripted on left-half), but by 50M even that was gone.
+
+**More training does not monotonically improve reactivity.** Given enough time, PPO eventually discovers a script that maximizes the *combined* game + proximity objective — clearing every brick while also positioning the paddle near where the ball will be. The proximity reward makes ball-tracking optimal for ~25M steps, but the optimizer never stops searching for a better optimum.
+
+The practical takeaway: **checkpoint selection is critical.** Save frequently and verify with the split-watcher. The best model may not be the last one.
+
 ## What This Means for Your PPO Projects
 
 If you're training PPO on any deterministic environment, there's a good chance your argmax is a script. The policy distribution might look reactive — it might shift its probabilities in response to game state. Your eval scores might look great. But the action actually *taken* could be a fixed sequence that ignores what's happening on screen.
@@ -156,10 +168,10 @@ Everything you need is in the repo: the wrapper, the training script, the split-
 
 The full history — all 123 failures, the diagnostic methodology, the blind spots I discovered along the way — lives at [BreakoutBot](https://github.com/mharrell/BreakoutBot). It's a messy, honest record of what it looks like to systematically eliminate hypotheses until only one is left standing.
 
-* * *
+---
 
 *Mike Harrell is an independent ML researcher. He does not have a master's degree or a PhD, but if he did, you can bet he'd be the kind of guy that would shout "Just what the doctor ordered!" every time he opened a package in the mail. You can find the code at [github.com/mharrell/breakout-reactive-ppo](https://github.com/mharrell/breakout-reactive-ppo) and the split-watcher video at [youtube.com/watch?v=6ixVwQm7u5Y](https://www.youtube.com/watch?v=6ixVwQm7u5Y).*
 
-* * *
+---
 
-*P.S. — I'm trying to get this posted on arXiv as a standalone paper so it's citable and findable. If you're an active arXiv author in cs.AI or cs.LG and found this work useful, you can endorse me here: https://arxiv.org/auth/endorse?x=MUM8BP — it takes one click. Or email me at mikey.harrell@gmail.com. Thanks for reading.*
+**I'm trying to get this posted on arXiv as a standalone paper so it's citable and findable.** If you're an active arXiv author in cs.AI or cs.LG and found this work useful, you can endorse me here: [arxiv.org/auth/endorse?x=MUM8BP](https://arxiv.org/auth/endorse?x=MUM8BP) — it takes one click. Or email me at mikey.harrell@gmail.com. Thanks for reading.
