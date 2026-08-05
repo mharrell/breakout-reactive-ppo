@@ -44,8 +44,8 @@ Proximal Policy Optimization (PPO) agents trained on deterministic Atari environ
 routinely converge to memorized action sequences (fixed scripts that replay the same
 buttons in the same order regardless of game state) rather than developing reactive,
 ball-tracking policies. Across 123 controlled experiments spanning every major
-environment-modification approach (sticky actions, entropy tuning, cursor
-wrappers, dynamics randomization, adversarial obstacles, and frame
+environment-modification approach (sticky actions, entropy tuning, auxiliary
+cursor-alignment objectives, dynamics randomization, adversarial obstacles, and frame
 skipping), no model produced a genuinely reactive argmax on Atari Breakout.
 We identify a fundamental confound underlying these failures: every diagnostic
 in the standard RL toolbox measures the policy distribution, not the
@@ -109,6 +109,18 @@ The contributions of this work are:
     the first verified reactive PPO argmax on Atari Breakout, achieving
     0/240 perfect transfers on the split-watcher.
 \end{enumerate}
+
+\noindent \textbf{Experiment naming.} Throughout this paper, individual PPO
+training runs are referenced by numbered labels (PPO\_1 through PPO\_124).
+These represent 124 controlled single-variable experiments conducted over the
+course of this investigation. PPO\_1--106 explored sticky actions, entropy
+tuning, reward clipping, and architectural variants. PPO\_107--117 tested
+\textit{cursor wrappers} (auxiliary training objectives that shape the policy
+distribution toward a target paddle position by adding a cursor-alignment term
+to the loss, without changing the game reward). PPO\_118--123 tested brick
+layout randomization and transfer to BeamRider, another Atari game. None of
+these 123 experiments produced a reactive argmax. PPO\_124, the proximity-reward
+model, is the focus of this paper.
 
 %-------------------------------------------------------------------------------
 \section{Related Work}
@@ -218,9 +230,11 @@ reverses direction to follow the teleported ball. A memorized script ignores
 the teleport and continues its fixed sequence. A reactive tracker reverses
 direction to track the new ball position.
 
-A center-hold dead script serves as the calibration baseline. The reversal
-rate is plotted against displacement magnitude to produce a dose-response
-curve; the area under this curve (AUC) quantifies overall reactivity.
+A center-hold dead script (a policy that holds the paddle at the center of
+the screen regardless of ball position) serves as the calibration baseline.
+The reversal rate is plotted against displacement magnitude to produce a
+dose-response curve; the area under this curve (AUC) quantifies overall
+reactivity.
 
 \subsection{Proximity Reward Wrapper}
 
@@ -334,9 +348,10 @@ but still indicates substantial correlation between paddle trajectories on
 different layouts. A fully reactive policy may retain nontrivial px\_corr
 because the ball's gross left-right motion is similar across layouts during the
 opening serve and early bounces; the action-level divergence (62--71\%) is the
-more direct measure of behavioral adaptation. For comparison, memorized cursor
-models (PPO\_111--118) and BeamRider models (baseline and
-BEAMRIDER\_MULTILIFE) all produced at least one perfect transfer (px\_corr
+more direct measure of behavioral adaptation. For comparison, memorized cursor-wrapper
+models (PPO\_111--118) and two BeamRider-trained models (another Atari game
+where the same distribution-vs-argmax confound was independently observed;
+see Experiment Naming above) all produced at least one perfect transfer (px\_corr
 $>$ 0.99) under the split-watcher. PPO\_124 is the first model in the
 project's history to achieve zero perfect transfers across all test
 conditions.
@@ -385,21 +400,26 @@ with the 37.5\% natural-reversal baseline in mind. Sample sizes are
 approximately 16--20 moving teleports per magnitude (teleports where the paddle
 was in motion pre-intervention); rates should be interpreted as exploratory
 given the small denominators. Prior cursor models (PPO\_107--117)
-showed 33--50\% reversal rates on the intervention probe but were confirmed
+showed 33--50\% reversal rates on the intervention gradient but were confirmed
 memorized by the split-watcher; those models had reactive \emph{distributions}
 but memorized \emph{argmax modes}.
 
 \subsection{Memorization Check}
 
 Table~\ref{tab:memcheck} shows the memorization check results (deterministic
-inference on clean Breakout, no proximity reward). PPO\_124 is the first model
-in the project's history to sustain MULTIPLE\_SCRIPTS on det=True without
+inference on clean Breakout, no proximity reward). The check runs the model
+deterministically for 20 games and classifies behavior by the number of
+unique episode scores produced: SINGLE\_SCRIPT (1 unique score, definitive
+memorization) or MULTIPLE\_SCRIPTS ($>$1 unique score, not definitive — score
+variance from life-loss timing and ball-bounce stochasticity can produce
+false positives). PPO\_124 is the first model in the project's history to
+sustain MULTIPLE\_SCRIPTS under deterministic inference without
 sticky action masking. Of the 13 checkpoints in the 14M--25M range, 10
 produced multiple unique scores (Table~\ref{tab:memcheck} shows a
 representative subset). Earlier models achieving MULTIPLE\_SCRIPTS
 did so only with sticky actions enabled (a known confound: sticky noise
 produces 8--14 unique scores from a dead policy). Under stochastic inference
-(det=False) on clean Breakout, the model achieves a best score of 216, the
+(stochastic) on clean Breakout, the model achieves a best score of 216, the
 highest recorded in this project without sticky masking.
 
 \begin{table}[h]
@@ -417,7 +437,7 @@ highest recorded in this project without sticky masking.
 25M & 4 & 93  & MULTIPLE\_SCRIPTS \\
 \bottomrule
 \end{tabular}
-\caption{Memorization check: det=True unique scores on clean Breakout.}
+\caption{Memorization check: number of unique deterministic scores on clean Breakout.}
 \label{tab:memcheck}
 \end{table}
 
@@ -504,10 +524,10 @@ retention) measures properties of the \emph{policy distribution}, not the
 reactive-looking distribution (90\% LEFT when ball is left, 90\% RIGHT when
 ball is right) while the argmax is always the same action regardless.
 
-This was confirmed empirically: cursor-wrapper models (PPO\_107--117) showed
-33--50\% reversal rates on the intervention probe and MULTIPLE\_SCRIPTS on
+This was confirmed empirically: cursor-wrapper models (PPO\_107--117)
+showed 33--50\% reversal rates on the intervention gradient and MULTIPLE\_SCRIPTS on
 memcheck, but were definitively memorized under split-watcher verification
-(perfect transfer on altered layouts). The intervention probe correctly
+(perfect transfer on altered layouts). The intervention gradient correctly
 measures that the distribution $P(a \mid s)$ changes when the ball position
 changes. It does not measure whether $\argmax_a P(a \mid s)$ changes. For
 models with high-confidence distributions (e.g., 90\% probability on the
